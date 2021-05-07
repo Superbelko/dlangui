@@ -1485,7 +1485,7 @@ class StringListWidget : ListWidget {
 
                 if (timePassed > dur!"msecs"(500)) _searchString = ""d;
             } else {
-                auto timePassed = _stopWatch.peek.dto!("seconds", float)(); // dtop is std.datetime.to
+                auto timePassed = cast(double) _stopWatch.peek.total!"seconds"; //.to!("seconds", float)(); // dtop is std.datetime.to
 
                 if (timePassed > 0.5) _searchString = ""d;
             }
