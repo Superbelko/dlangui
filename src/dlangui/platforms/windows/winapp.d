@@ -151,7 +151,7 @@ static if (ENABLE_OPENGL) {
         return hPalette;
     }
 
-    private __gshared bool DERELICT_GL3_RELOADED = false;
+    private __gshared bool BINDBC_GL3_RELOADED = false; // is this even used?
 }
 
 const uint CUSTOM_MESSAGE_ID = WM_USER + 1;
@@ -160,7 +160,7 @@ static if (ENABLE_OPENGL) {
 
     /// Shared opengl context helper
     struct SharedGLContext {
-        import derelict.opengl; //3.wgl;
+        import bindbc.opengl;
 
         HGLRC _hGLRC; // opengl context
         HPALETTE _hPalette;
@@ -323,8 +323,8 @@ class Win32Window : Window {
             EndPaint(_hwnd, &ps);
 
 
-            import derelict.opengl; //3.gl3;
-            import derelict.opengl; //3.wgl;
+            import bindbc.opengl; //3.gl3;
+            import bindbc.opengl; //3.wgl;
             import dlangui.graphics.gldrawbuf;
             //Log.d("onPaint() start drawing opengl viewport: ", _dx, "x", _dy);
             //PAINTSTRUCT ps;
@@ -1309,15 +1309,18 @@ string[] splitCmdLine(string line) {
 private __gshared Win32Platform w32platform;
 
 static if (ENABLE_OPENGL) {
-    import derelict.opengl; //3.gl3;
-    //import derelict.opengl3.gl;
+    import bindbc.opengl;
+    import bindbc.opengl.config : GLSupportVersion = GLSupport;
 
     void initOpenGL() {
         try {
-            Log.d("Loading Derelict GL");
-            //DerelictGL.load();
-            DerelictGL3.load();
-            Log.d("Derelict GL - loaded");
+            Log.d("Loading bindbc-opengl");
+            auto glVer = loadOpenGL();
+            if(glVer < GLSupportVersion.gl32) {
+                import std.format : format;
+                throw new Exception(format!"OpenGL 3.2 or higher is required, got: %s"(glVer));
+            }
+            Log.d("bindbc-opengl - loaded");
             //
             //// just to check OpenGL context
             //Log.i("Trying to setup OpenGL context");
@@ -1376,9 +1379,9 @@ int myWinMain(void* hInstance, void* hPrevInstance, char* lpCmdLine, int iCmdSho
 
     currentTheme = createDefaultTheme();
 
-    static if (ENABLE_OPENGL) {
-        initOpenGL();
-    }
+    //static if (ENABLE_OPENGL) {
+    //    initOpenGL();
+    //}
 
     // Load versions 1.2+ and all supported ARB and EXT extensions.
 
@@ -1443,9 +1446,9 @@ int myWinMainProfile(string[] args)
 
     currentTheme = createDefaultTheme();
 
-    static if (ENABLE_OPENGL) {
-        initOpenGL();
-    }
+    //static if (ENABLE_OPENGL) {
+    //    initOpenGL();
+    //}
 
     // Load versions 1.2+ and all supported ARB and EXT extensions.
 

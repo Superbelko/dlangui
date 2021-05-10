@@ -48,27 +48,36 @@ version (Android) {
 
 } else {
     enum SUPPORT_LEGACY_OPENGL = false; //true;
-    public import derelict.opengl;
-    //public import derelict.opengl.types;
-    //public import derelict.opengl.versions.base;
-    //public import derelict.opengl.versions.gl3x;
-    //public import derelict.opengl.gl;
+    public import bindbc.opengl;
+    public import bindbc.opengl.bind.arb.core_30;
+    import loader = bindbc.loader.sharedlib;
 
-derelict.util.exception.ShouldThrow gl3MissingSymFunc( string symName ) {
+
+private void gl3CheckMissingSymFunc(const(loader.ErrorInfo)[] errors)
+{
     import std.algorithm : equal;
-    static import derelict.util.exception;
-    foreach(s; ["glGetError", "glShaderSource", "glCompileShader",
+    immutable names = ["glGetError", "glShaderSource", "glCompileShader",
             "glGetShaderiv", "glGetShaderInfoLog", "glGetString",
             "glCreateProgram", "glUseProgram", "glDeleteProgram",
             "glDeleteShader", "glEnable", "glDisable", "glBlendFunc",
             "glUniformMatrix4fv", "glGetAttribLocation", "glGetUniformLocation",
             "glGenVertexArrays", "glBindVertexArray", "glBufferData",
-            "glBindBuffer", "glBufferSubData"]) {
-        if (symName.equal(s)) // Symbol is used
-            return derelict.util.exception.ShouldThrow.Yes;
+            "glBindBuffer", "glBufferSubData"];
+    foreach(info; errors)
+    {
+        import std.array;
+        import std.algorithm;
+        import std.exception;
+        import core.stdc.string;
+        // NOTE: this has crappy complexity as it was just updated as is
+        //     it also does not checks if the symbol was actually loaded
+        auto errMsg = cast(string) info.message[0 .. info.message.strlen];
+        bool found = names
+            .filter!(s => s.canFind(errMsg))
+            .array()
+            .length > 0;
+        enforce(!found, { return errMsg.idup; });
     }
-    // Don't throw for unused symbol
-    return derelict.util.exception.ShouldThrow.No;
 }
 
 
@@ -662,37 +671,38 @@ __gshared bool glNoContext;
 /// initialize OpenGL support helper (call when current OpenGL context is initialized)
 bool initGLSupport(bool legacy = false) {
     import dlangui.platforms.common.platform : setOpenglEnabled;
+    import loader = bindbc.loader.sharedlib;
     if (_glSupport && _glSupport.valid)
         return true;
     version(Android) {
         Log.d("initGLSupport");
     } else {
-        static bool DERELICT_GL3_RELOADED;
+        static bool BINDBC_GL3_RELOADED;
 	    static bool gl3ReloadedOk;
         static bool glReloadedOk;
-	    if (!DERELICT_GL3_RELOADED) {
-    	    DERELICT_GL3_RELOADED = true;
+	    if (!BINDBC_GL3_RELOADED) {
+    	    BINDBC_GL3_RELOADED = true;
             try {
-                Log.v("Reloading DerelictGL3");
-                import derelict.opengl; //.gl3;
-                DerelictGL3.missingSymbolCallback = &gl3MissingSymFunc;
-                DerelictGL3.reload();
+                Log.v("Reloading bindbc-opengl");
+                import bindbc.opengl;
+                loadOpenGL();
+                gl3CheckMissingSymFunc(loader.errors);
                 gl3ReloadedOk = true;
             } catch (Exception e) {
-                Log.e("Derelict exception while reloading DerelictGL3", e);
+                Log.e("bindbc-opengl exception while reloading opengl", e);
             }
             try {
-                Log.v("Reloading DerelictGL");
-                import derelict.opengl; //.gl;
-                DerelictGL3.missingSymbolCallback = &gl3MissingSymFunc;
-                DerelictGL3.reload();
+                Log.v("Reloading bindbc-opengl");
+                import bindbc.opengl;
+                loadOpenGL();
+                gl3CheckMissingSymFunc(loader.errors);
                 glReloadedOk = true;
             } catch (Exception e) {
-                Log.e("Derelict exception while reloading DerelictGL", e);
+                Log.e("bindbc-opengl exception while reloading opengl", e);
             }
         }
         if (!gl3ReloadedOk && !glReloadedOk) {
-            Log.e("Neither DerelictGL3 nor DerelictGL were reloaded successfully");
+            Log.e("bindbc-opengl reloaded unsuccessfully");
             return false;
         }
         if (!gl3ReloadedOk)

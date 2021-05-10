@@ -39,19 +39,19 @@ import dlangui.widgets.styles;
 import dlangui.widgets.widget;
 import dlangui.platforms.common.platform;
 
-import derelict.sdl2.sdl;
+import bindbc.sdl;
 
 static if (ENABLE_OPENGL) {
     //import derelict.opengl3.gl3;
-    import derelict.opengl;
+    import bindbc.opengl;
     import dlangui.graphics.gldrawbuf;
     import dlangui.graphics.glsupport;
+    import loader = bindbc.loader.sharedlib;
 }
 
-private derelict.util.exception.ShouldThrow missingSymFunc( string symName ) {
+private void sdlCheckMissingSymFunc(const(loader.ErrorInfo)[] errors) {
     import std.algorithm : equal;
-    static import derelict.util.exception;
-    foreach(s; ["SDL_DestroyRenderer", "SDL_GL_DeleteContext", "SDL_DestroyWindow", "SDL_PushEvent",
+    immutable names = ["SDL_DestroyRenderer", "SDL_GL_DeleteContext", "SDL_DestroyWindow", "SDL_PushEvent",
                 "SDL_GL_SetAttribute", "SDL_GL_CreateContext", "SDL_GetError",
                 "SDL_CreateWindow", "SDL_CreateRenderer", "SDL_GetWindowSize",
                 "SDL_GL_GetDrawableSize", "SDL_GetWindowID", "SDL_SetWindowSize",
@@ -64,12 +64,22 @@ private derelict.util.exception.ShouldThrow missingSymFunc( string symName ) {
                 "SDL_RemoveTimer", "SDL_RemoveTimer", "SDL_PushEvent",
                 "SDL_RegisterEvents", "SDL_WaitEvent", "SDL_StartTextInput",
                 "SDL_Quit", "SDL_HasClipboardText", "SDL_GetClipboardText",
-                "SDL_free", "SDL_SetClipboardText", "SDL_Init", "SDL_GetNumVideoDisplays"]) {//"SDL_GetDisplayDPI"
-        if (symName.equal(s)) // Symbol is used
-            return derelict.util.exception.ShouldThrow.Yes;
+                "SDL_free", "SDL_SetClipboardText", "SDL_Init", "SDL_GetNumVideoDisplays"]; //"SDL_GetDisplayDPI"
+    foreach(info; errors)
+    {
+        import std.array;
+        import std.algorithm;
+        import std.exception;
+        import core.stdc.string;
+        // NOTE: this has crappy complexity as it was just updated as is
+        //     it also does not checks if the symbol was actually loaded
+        auto errMsg = cast(string) info.message[0 .. info.message.strlen];
+        bool found = names
+            .filter!(s => s.canFind(errMsg))
+            .array()
+            .length > 0;
+        enforce(!found, { return errMsg.idup; });
     }
-    // Don't throw for unused symbol
-    return derelict.util.exception.ShouldThrow.No;
 }
 
 private __gshared SDL_EventType USER_EVENT_ID;
@@ -1639,9 +1649,12 @@ int sdlmain(string[] args) {
     }
 
     try {
-        DerelictSDL2.missingSymbolCallback = &missingSymFunc;
+        import std.exception;
+        //DerelictSDL2.missingSymbolCallback = &missingSymFunc;
         // Load the SDL 2 library.
-        DerelictSDL2.load();
+        auto sdlVer = loadSDL();
+        enforce(sdlVer != SDLSupport.noLibrary && sdlVer != SDLSupport.badLibrary, "bindbc-sdl unable to find SDL2 library");
+        sdlCheckMissingSymFunc(loader.errors);
     } catch (Exception e) {
         Log.e("Cannot load SDL2 library", e);
         return 1;
@@ -1649,8 +1662,7 @@ int sdlmain(string[] args) {
 
     static if (ENABLE_OPENGL) {
         try {
-            DerelictGL3.missingSymbolCallback = &gl3MissingSymFunc;
-            DerelictGL3.load();
+            // do nothing? it should be ok since this is already done in glsupport module
             //DerelictGL3.missingSymbolCallback = &gl3MissingSymFunc;
             //DerelictGL3.load();
             _enableOpengl = true;
